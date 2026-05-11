@@ -1,17 +1,38 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { Chart } from 'chart.js';
 
-	let calYear = 2026;
-	let calMonth = 4; // May (0-indexed)
-	let selectedDay: number | null = null;
-	let detailChartInst: Chart | null = null;
-
-	interface DayData {
+	type DayData = {
 		suhu: number;
 		hum: number;
 		co2: number;
-	}
+	};
+
+	type CalendarCell = {
+		day: number;
+		other: boolean;
+		data?: DayData;
+	};
+
+	let calYear = $state(2026);
+	let calMonth = $state(4);
+	let selectedDay = $state<number | null>(null);
+	let detailChartInst: Chart | null = null;
+
+	const monthNames = [
+		'Januari',
+		'Februari',
+		'Maret',
+		'April',
+		'Mei',
+		'Juni',
+		'Juli',
+		'Agustus',
+		'September',
+		'Oktober',
+		'November',
+		'Desember'
+	];
+	const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
 
 	function seededRand(seed: number) {
 		let s = seed;
@@ -25,59 +46,45 @@
 		const r = seededRand(year * 100 + month);
 		const days = new Date(year, month + 1, 0).getDate();
 		const data: Record<number, DayData> = {};
-		for (let d = 1; d <= days; d++) {
-			data[d] = {
+
+		for (let day = 1; day <= days; day++) {
+			data[day] = {
 				suhu: 29 + Math.floor(r() * 8),
 				hum: 60 + Math.floor(r() * 25),
 				co2: 500 + Math.floor(r() * 300)
 			};
 		}
+
 		return data;
 	}
 
 	function renderCalendar() {
-		const monthNames = [
-			'Januari',
-			'Februari',
-			'Maret',
-			'April',
-			'Mei',
-			'Juni',
-			'Juli',
-			'Agustus',
-			'September',
-			'Oktober',
-			'November',
-			'Desember'
-		];
-
 		const data = getMonthData(calYear, calMonth);
 		const firstDay = new Date(calYear, calMonth, 1).getDay();
 		const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
 		const daysInPrev = new Date(calYear, calMonth, 0).getDate();
+		const cells: CalendarCell[] = [];
 
-		const today = new Date();
-		let cells: Array<{ day: number; other: boolean; data?: DayData }> = [];
+		for (let index = firstDay - 1; index >= 0; index--) {
+			cells.push({ day: daysInPrev - index, other: true });
+		}
 
-		for (let i = firstDay - 1; i >= 0; i--) {
-			cells.push({ day: daysInPrev - i, other: true });
+		for (let day = 1; day <= daysInMonth; day++) {
+			cells.push({ day, other: false, data: data[day] });
 		}
-		for (let d = 1; d <= daysInMonth; d++) {
-			cells.push({ day: d, other: false, data: data[d] });
-		}
+
 		while (cells.length % 7 !== 0) {
 			cells.push({ day: cells.length - firstDay - daysInMonth + 1, other: true });
 		}
 
 		return {
 			monthLabel: `${monthNames[calMonth]} ${calYear}`,
-			cells,
-			today
+			cells
 		};
 	}
 
-	function changeMonth(dir: number) {
-		calMonth += dir;
+	function changeMonth(direction: number) {
+		calMonth += direction;
 		if (calMonth > 11) {
 			calMonth = 0;
 			calYear++;
@@ -92,44 +99,34 @@
 	function showDayDetail(day: number, dayData: DayData) {
 		selectedDay = day;
 
-		const monthNames = [
-			'Januari',
-			'Februari',
-			'Maret',
-			'April',
-			'Mei',
-			'Juni',
-			'Juli',
-			'Agustus',
-			'September',
-			'Oktober',
-			'November',
-			'Desember'
-		];
-		const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
-
 		const r = seededRand(calYear * 10000 + calMonth * 100 + day);
-		const hrs = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'];
-		const suhuH = hrs.map(() => dayData.suhu - 3 + Math.floor(r() * 8));
-		const humH = hrs.map(() => dayData.hum - 10 + Math.floor(r() * 20));
-		const co2H = hrs.map(() => dayData.co2 - 100 + Math.floor(r() * 200));
+		const hours = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'];
+		const suhuSeries = hours.map(() => dayData.suhu - 3 + Math.floor(r() * 8));
+		const humSeries = hours.map(() => dayData.hum - 10 + Math.floor(r() * 20));
+		const co2Series = hours.map(() => dayData.co2 - 100 + Math.floor(r() * 200));
 
-		if (detailChartInst) detailChartInst.destroy();
+		if (detailChartInst) {
+			detailChartInst.destroy();
+		}
 
-		const canvas = document.getElementById('detailChart') as HTMLCanvasElement;
-		if (!canvas) return;
+		const canvas = document.getElementById('detailChart') as HTMLCanvasElement | null;
+		if (!canvas) {
+			return;
+		}
 
-		const dc = canvas.getContext('2d');
-		if (!dc) return;
+		const context = canvas.getContext('2d');
+		if (!context) {
+			return;
+		}
 
-		detailChartInst = new Chart(dc, {
+		detailChartInst = new Chart(context, {
 			type: 'line',
 			data: {
-				labels: hrs,
+				labels: hours,
 				datasets: [
 					{
 						label: 'Suhu',
-						data: suhuH,
+						data: suhuSeries,
 						borderColor: '#f59e0b',
 						tension: 0.4,
 						borderWidth: 2,
@@ -138,7 +135,7 @@
 					},
 					{
 						label: 'Kelembapan',
-						data: humH,
+						data: humSeries,
 						borderColor: '#38bdf8',
 						tension: 0.4,
 						borderWidth: 2,
@@ -148,7 +145,7 @@
 					},
 					{
 						label: 'CO₂ (/10)',
-						data: co2H.map((v) => v / 10),
+						data: co2Series.map((value) => value / 10),
 						borderColor: '#22d6a0',
 						tension: 0.4,
 						borderWidth: 2,
@@ -175,30 +172,8 @@
 		});
 	}
 
-	let calendarData = $derived(renderCalendar());
-
-	onMount(() => {
-		const monthNames = [
-			'Januari',
-			'Februari',
-			'Maret',
-			'April',
-			'Mei',
-			'Juni',
-			'Juli',
-			'Agustus',
-			'September',
-			'Oktober',
-			'November',
-			'Desember'
-		];
-		const headers = document.getElementById('cal-headers');
-		if (headers) {
-			headers.innerHTML = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab']
-				.map((h) => `<div class="cal-header">${h}</div>`)
-				.join('');
-		}
-	});
+	let calendarData = $derived.by(() => renderCalendar());
+	let selectedCell = $derived.by(() => calendarData.cells.find((cell) => cell.day === selectedDay && !cell.other));
 </script>
 
 <div class="page-title">Riwayat Data Udara</div>
@@ -207,19 +182,23 @@
 <div class="history-layout">
 	<div class="card">
 		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-			<button onclick={() => changeMonth(-1)} class="month-btn">‹</button>
+			<button type="button" onclick={() => changeMonth(-1)} class="month-btn">‹</button>
 			<span style="font-size:15px;font-weight:600">{calendarData.monthLabel}</span>
-			<button onclick={() => changeMonth(1)} class="month-btn">›</button>
+			<button type="button" onclick={() => changeMonth(1)} class="month-btn">›</button>
 		</div>
 
-		<div class="calendar-grid" id="cal-headers"></div>
+		<div class="calendar-grid">
+			{#each dayNames as dayName}
+				<div class="cal-header">{dayName}</div>
+			{/each}
+		</div>
 		<div class="calendar-grid" style="margin-top:4px">
 			{#each calendarData.cells as cell}
-				<div
+				<button
+					type="button"
 					class="cal-day {cell.other ? 'other-month' : ''} {selectedDay === cell.day && !cell.other ? 'selected' : ''}"
 					onclick={() => !cell.other && cell.data && showDayDetail(cell.day, cell.data)}
-					role="button"
-					tabindex="0"
+					disabled={cell.other || !cell.data}
 				>
 					<div class="day-num">{cell.day}</div>
 					{#if !cell.other && cell.data}
@@ -229,7 +208,7 @@
 							<div class="day-bar" style="height:{Math.round((cell.data.co2 / 900) * 24)}px;background:#22d6a0"></div>
 						</div>
 					{/if}
-				</div>
+				</button>
 			{/each}
 		</div>
 
@@ -258,17 +237,17 @@
 			<div class="detail-stats">
 				<div class="detail-stat">
 					<div class="detail-stat-label">Suhu</div>
-					<div class="detail-stat-val">{selectedDay && calendarData.cells.find((c) => c.day === selectedDay && !c.other) ? calendarData.cells.find((c) => c.day === selectedDay && !c.other)?.data?.suhu + '°C' : '—'}</div>
+					<div class="detail-stat-val">{selectedCell?.data ? `${selectedCell.data.suhu}°C` : '—'}</div>
 					<div style="font-size:10px;color:rgba(232,237,248,0.55)">Avg</div>
 				</div>
 				<div class="detail-stat">
 					<div class="detail-stat-label">Kelembapan</div>
-					<div class="detail-stat-val">{selectedDay && calendarData.cells.find((c) => c.day === selectedDay && !c.other) ? calendarData.cells.find((c) => c.day === selectedDay && !c.other)?.data?.hum + '%' : '—'}</div>
+					<div class="detail-stat-val">{selectedCell?.data ? `${selectedCell.data.hum}%` : '—'}</div>
 					<div style="font-size:10px;color:rgba(232,237,248,0.55)">Avg</div>
 				</div>
 				<div class="detail-stat">
 					<div class="detail-stat-label">CO₂</div>
-					<div class="detail-stat-val">{selectedDay && calendarData.cells.find((c) => c.day === selectedDay && !c.other) ? calendarData.cells.find((c) => c.day === selectedDay && !c.other)?.data?.co2 + ' ppm' : '—'}</div>
+					<div class="detail-stat-val">{selectedCell?.data ? `${selectedCell.data.co2} ppm` : '—'}</div>
 					<div style="font-size:10px;color:rgba(232,237,248,0.55)">Avg</div>
 				</div>
 			</div>
@@ -340,6 +319,12 @@
 	}
 
 	.cal-day {
+		appearance: none;
+		background: transparent;
+		width: 100%;
+		text-align: left;
+		font: inherit;
+		color: inherit;
 		border-radius: 8px;
 		padding: 6px 4px;
 		cursor: pointer;
@@ -361,6 +346,11 @@
 	.cal-day.other-month .day-num {
 		color: rgba(232, 237, 248, 0.55);
 		opacity: 0.4;
+	}
+
+	.cal-day:disabled {
+		cursor: default;
+		opacity: 1;
 	}
 
 	.day-num {
