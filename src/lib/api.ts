@@ -45,6 +45,16 @@ export async function dismissWarning(id: number) {
   return res.json();
 }
 
+export async function dismissWarningsBulk(ids: number[]) {
+  const res = await fetch(`${API_BASE}/api/v1/warnings/dismiss-bulk`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids })
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 export async function getDashboard(mac?: string) {
   const q = mac ? `?mac_address=${encodeURIComponent(mac)}` : '';
   const data = await request(`/api/v1/dashboard${q}`);

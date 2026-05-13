@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { getWarnings, dismissWarning } from '$lib/api';
+	import { getWarnings, dismissWarning, dismissWarningsBulk } from '$lib/api';
 	import { alertCount } from '$lib/stores';
 
 	const DEMO_MAC = 'D4:E9:F4:8A:AF:4C'; // Hardcoded MAC for single device
@@ -20,6 +20,7 @@
 	let hiddenAlerts = $derived.by(() => allAlerts.slice(MAX_VISIBLE));
 
 	let showingMore = $state(false);
+	let isClearing = $state(false);
 
 	function toggleMoreAlerts() {
 		showingMore = !showingMore;
@@ -34,6 +35,24 @@
 			alertCount.set(allAlerts.length);
 		} catch (err) {
 			console.error('Failed to dismiss warning:', err);
+		}
+	}
+
+	async function handleClearAll() {
+		if (isClearing || allAlerts.length === 0) return;
+
+		isClearing = true;
+		const currentIds = allAlerts.map((alert) => alert.id);
+
+		try {
+			await dismissWarningsBulk(currentIds);
+			allAlerts = [];
+			showingMore = false;
+			alertCount.set(allAlerts.length);
+		} catch (err) {
+			console.error('Failed to clear all warnings:', err);
+		} finally {
+			isClearing = false;
 		}
 	}
 
@@ -66,7 +85,12 @@
 <div class="card">
 	<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
 		<span style="font-size:14px;font-weight:600">Peringatan Aktif</span>
-		<span class="alert-count-badge">{allAlerts.length} peringatan</span>
+		<div style="display:flex;align-items:center;gap:8px">
+			<span class="alert-count-badge">{allAlerts.length} peringatan</span>
+			<button class="clear-all-btn" onclick={handleClearAll} disabled={isClearing || allAlerts.length === 0}>
+				{isClearing ? 'Clearing...' : 'Clear All'}
+			</button>
+		</div>
 	</div>
 
 	<div class="alert-list">
@@ -336,6 +360,29 @@
 		border-radius: 20px;
 		font-size: 11px;
 		font-weight: 700;
+	}
+
+	.clear-all-btn {
+		padding: 6px 10px;
+		border-radius: 8px;
+		border: 1px solid rgba(244, 63, 94, 0.4);
+		background: rgba(244, 63, 94, 0.14);
+		color: #fda4af;
+		font-size: 11px;
+		font-weight: 700;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.clear-all-btn:hover:not(:disabled) {
+		background: rgba(244, 63, 94, 0.22);
+		border-color: rgba(244, 63, 94, 0.6);
+		color: #ffe4e6;
+	}
+
+	.clear-all-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 
 	/* Tablet: 768px and down */

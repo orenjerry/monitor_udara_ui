@@ -342,7 +342,7 @@
 		<div class="stat-label">
 			<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2.5"
 				><circle cx="12" cy="12" r="10" /><path d="M12 8v8M8 12h8" /></svg>
-			CO₂
+			Kualitas Udara
 		</div>
 		<div class="stat-value">{displayCo2}<span class="stat-unit"> ppm</span></div>
 		<div class="stat-badge {co2BadgeClass}">{co2Category}</div>
@@ -356,7 +356,7 @@
 		<div class="stat-badge {statusClass}" style="font-size:13px;padding:6px 12px">{status}</div>
 		<div style="font-size:11px;color:rgba(232,237,248,0.55);margin-top:8px;line-height:1.5">
 			{#if status === 'Normal'}Kondisi normal.
-			{:else if status === 'Warning'}CO₂ melebihi batas aman. Ventilasi diperlukan.
+			{:else if status === 'Warning'}Kualitas Udara melebihi batas aman. Ventilasi diperlukan.
 			{:else if status === '--'}Data belum tersedia.
 			{:else}CO₂ pada level kritis — segera ambil tindakan.
 			{/if}
@@ -391,7 +391,7 @@
 		<div class="legend" style="margin-top:12px;justify-content:flex-start;flex-direction:column;gap:8px">
 			<div style="display:flex;align-items:center;gap:6px"><div class="legend-dot" style="background:#f59e0b"></div><span style="font-size:12px">Suhu — {displaySuhu}°C</span></div>
 			<div style="display:flex;align-items:center;gap:6px"><div class="legend-dot" style="background:#38bdf8"></div><span style="font-size:12px">Kelembapan — {displayHum}%</span></div>
-			<div style="display:flex;align-items:center;gap:6px"><div class="legend-dot" style="background:#22d6a0;margin-left:0"></div><span style="font-size:12px;margin-left:6px">CO₂ — {displayCo2} ppm</span></div>
+			<div style="display:flex;align-items:center;gap:6px"><div class="legend-dot" style="background:#22d6a0;margin-left:0"></div><span style="font-size:12px">Kualitas Udara — {displayCo2} ppm</span></div>
 		</div>
 	</div>
 </div>
