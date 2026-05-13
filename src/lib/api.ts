@@ -17,7 +17,7 @@ function getAPIBase(): string {
 	// 	}
 	// }
 	
-  return 'http://monitor-udara-api.kinnaa.site:26001';
+  return 'http://alpha.prowcloud.my.id:26001';
 }
 
 export const API_BASE = getAPIBase();
