@@ -5,7 +5,7 @@
 
 	type PageId = 'dashboard' | 'history' | 'alert' | 'profil';
 
-	const DEMO_MAC = 'd4:e9:f4:8a:af:4c'; // Hardcoded MAC for single device
+	const DEMO_MAC = 'D4:E9:F4:8A:AF:4C'; // Hardcoded MAC for single device
 
 	const pages: Array<{ id: PageId; label: string; icon: string }> = [
 		{ id: 'dashboard', label: 'Dashboard', icon: 'grid' },

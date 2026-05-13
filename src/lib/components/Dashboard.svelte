@@ -5,7 +5,7 @@
 
 	import { getDashboard } from '$lib/api';
 
-	const DEMO_MAC = 'd4:e9:f4:8a:af:4c'; // Hardcoded MAC for single device
+	const DEMO_MAC = 'D4:E9:F4:8A:AF:4C'; // Hardcoded MAC for single device
 
 	let dashTime = $state('');
 	let mainChart: Chart;
@@ -34,7 +34,7 @@
 		if (!hasDashboardData) return '--';
 		const v = Number(co2Val ?? 0);
 		if (v >= 1000) return 'Kritis';
-		if (v >= 150) return 'Warning';
+		if (v >= 600) return 'Warning';
 		return 'Normal';
 	});
 
@@ -52,6 +52,65 @@
 	let displaySuhu = $derived.by(() => hasDashboardData ? Math.round(tempVal) : '--');
 	let displayHum = $derived.by(() => hasDashboardData ? Math.round(humVal) : '--');
 	let displayCo2 = $derived.by(() => hasDashboardData ? Math.round(co2Val) : '--');
+
+	// CO2 category and badge class based on ppm guidance
+	let co2Category = $derived.by(() => {
+		if (!hasDashboardData) return '--';
+		const v = Number(co2Val ?? 0);
+		if (v < 400) return 'Segar';
+		if (v < 600) return 'Optimal';
+		if (v < 1000) return 'Normal';
+		if (v < 2000) return 'Pengap';
+		if (v < 5000) return 'Berbahaya';
+		return 'Sangat Tinggi';
+	});
+
+	let co2BadgeClass = $derived.by(() => {
+		if (co2Category === '--') return 'badge-secondary';
+		if (co2Category === 'Segar') return 'badge-fresh';
+		if (co2Category === 'Optimal') return 'badge-optimal';
+		if (co2Category === 'Normal') return 'badge-normal';
+		if (co2Category === 'Pengap') return 'badge-warning';
+		return 'badge-danger';
+	});
+
+	// Temperature category and badge class
+	let tempCategory = $derived.by(() => {
+		if (!hasDashboardData) return '--';
+		const v = Number(tempVal ?? 0);
+		if (v < 18) return 'Dingin';
+		if (v < 22) return 'Sejuk';
+		if (v < 26) return 'Nyaman';
+		if (v < 30) return 'Hangat';
+		return 'Panas';
+	});
+
+	let tempBadgeClass = $derived.by(() => {
+		if (tempCategory === '--') return 'badge-secondary';
+		if (tempCategory === 'Dingin') return 'badge-cold';
+		if (tempCategory === 'Sejuk') return 'badge-cool';
+		if (tempCategory === 'Nyaman') return 'badge-comfortable';
+		if (tempCategory === 'Hangat') return 'badge-warm';
+		return 'badge-hot';
+	});
+
+	// Humidity category and badge class
+	let humCategory = $derived.by(() => {
+		if (!hasDashboardData) return '--';
+		const v = Number(humVal ?? 0);
+		if (v < 30) return 'Kering';
+		if (v < 50) return 'Nyaman';
+		if (v < 70) return 'Lembab';
+		return 'Sangat Lembab';
+	});
+
+	let humBadgeClass = $derived.by(() => {
+		if (humCategory === '--') return 'badge-secondary';
+		if (humCategory === 'Kering') return 'badge-dry';
+		if (humCategory === 'Nyaman') return 'badge-comfortable';
+		if (humCategory === 'Lembab') return 'badge-humid';
+		return 'badge-very-humid';
+	});
 
 	function updateDashTime() {
 		const now = new Date();
@@ -268,7 +327,7 @@
 			Suhu
 		</div>
 		<div class="stat-value">{displaySuhu}<span class="stat-unit">°C</span></div>
-		<div class="stat-badge badge-warning">{suhuBadge}</div>
+		<div class="stat-badge {tempBadgeClass}">{tempCategory}</div>
 	</div>
 	<div class="stat-card hum">
 		<div class="stat-label">
@@ -277,7 +336,7 @@
 			Kelembapan
 		</div>
 		<div class="stat-value">{displayHum}<span class="stat-unit">%</span></div>
-		<div class="stat-badge badge-warning">{humBadge}</div>
+		<div class="stat-badge {humBadgeClass}">{humCategory}</div>
 	</div>
 	<div class="stat-card co2">
 		<div class="stat-label">
@@ -286,7 +345,7 @@
 			CO₂
 		</div>
 		<div class="stat-value">{displayCo2}<span class="stat-unit"> ppm</span></div>
-		<div class="stat-badge badge-danger">{co2Badge}</div>
+		<div class="stat-badge {co2BadgeClass}">{co2Category}</div>
 	</div>
 	<div class="stat-card status">
 		<div class="stat-label">
@@ -449,6 +508,64 @@
 	.badge-success {
 		background: rgba(34, 214, 160, 0.2);
 		color: #22d6a0;
+	}
+
+	/* Additional CO2 badge colors */
+	.badge-fresh {
+		background: rgba(34, 214, 160, 0.12);
+		color: #16a34a;
+	}
+
+	.badge-optimal {
+		background: rgba(56, 189, 248, 0.08);
+		color: #06b6d4;
+	}
+
+	.badge-normal {
+		background: rgba(245, 158, 11, 0.08);
+		color: #b45309;
+	}
+
+	/* Temperature badge colors */
+	.badge-cold {
+		background: rgba(59, 130, 246, 0.2);
+		color: #3b82f6;
+	}
+
+	.badge-cool {
+		background: rgba(34, 211, 238, 0.2);
+		color: #06b6d4;
+	}
+
+	.badge-comfortable {
+		background: rgba(34, 214, 160, 0.2);
+		color: #10b981;
+	}
+
+	.badge-warm {
+		background: rgba(251, 146, 60, 0.2);
+		color: #fb923c;
+	}
+
+	.badge-hot {
+		background: rgba(244, 63, 94, 0.2);
+		color: #ef4444;
+	}
+
+	/* Humidity badge colors */
+	.badge-dry {
+		background: rgba(234, 179, 8, 0.2);
+		color: #eab308;
+	}
+
+	.badge-humid {
+		background: rgba(56, 189, 248, 0.2);
+		color: #0284c7;
+	}
+
+	.badge-very-humid {
+		background: rgba(168, 85, 247, 0.2);
+		color: #a855f7;
 	}
 
 	.badge-secondary {

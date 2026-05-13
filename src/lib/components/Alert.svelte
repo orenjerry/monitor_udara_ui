@@ -3,7 +3,7 @@
 	import { getWarnings, dismissWarning } from '$lib/api';
 	import { alertCount } from '$lib/stores';
 
-	const DEMO_MAC = 'd4:e9:f4:8a:af:4c'; // Hardcoded MAC for single device
+	const DEMO_MAC = 'D4:E9:F4:8A:AF:4C'; // Hardcoded MAC for single device
 
 	interface AlertItem {
 		id: number;
