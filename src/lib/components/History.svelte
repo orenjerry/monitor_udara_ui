@@ -1,5 +1,9 @@
 <script lang="ts">
 	import { Chart } from 'chart.js';
+	import { onMount } from 'svelte';
+	import { getHistory } from '$lib/api';
+
+	const DEMO_MAC = 'd4:e9:f4:8a:af:4c'; // Hardcoded MAC for single device
 
 	type DayData = {
 		suhu: number;
@@ -13,46 +17,62 @@
 		data?: DayData;
 	};
 
-	let calYear = $state(2026);
-	let calMonth = $state(4);
+	let calYear = $state(new Date().getFullYear());
+	let calMonth = $state(new Date().getMonth());
 	let selectedDay = $state<number | null>(null);
 	let detailChartInst: Chart | null = null;
 
 	const monthNames = [
-		'Januari',
-		'Februari',
-		'Maret',
-		'April',
-		'Mei',
-		'Juni',
-		'Juli',
-		'Agustus',
-		'September',
-		'Oktober',
-		'November',
-		'Desember'
+		'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
 	];
 	const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
 
-	function seededRand(seed: number) {
-		let s = seed;
-		return () => {
-			s = (s * 1664525 + 1013904223) % 4294967296;
-			return s / 4294967296;
-		};
-	}
+	// historyMap keyed by ISO date 'YYYY-MM-DD'
+	let historyMap: Record<string, DayData> = {};
+	let hasHistoryData = $derived.by(() => Object.keys(historyMap).length > 0);
+
+	onMount(() => {
+		getHistory(DEMO_MAC)
+			.then((rows: any[]) => {
+				// aggregate by date
+				const accum: Record<string, { s: number; h: number; c: number; n: number }> = {};
+				for (const r of rows) {
+					const dt = new Date(r.end_date || r.start_date || Date.now());
+					const key = dt.toISOString().slice(0, 10);
+					if (!accum[key]) accum[key] = { s: 0, h: 0, c: 0, n: 0 };
+					accum[key].s += Number(r.suhu ?? r.kelembapan ?? 0) || Number(r.suhu ?? 0);
+					// API stores kelembapan and kualitas_udara separately
+					accum[key].h += Number(r.kelembapan ?? 0);
+					accum[key].c += Number(r.kualitas_udara ?? r.value ?? 0);
+					accum[key].n += 1;
+				}
+
+				for (const k of Object.keys(accum)) {
+					const a = accum[k];
+					historyMap[k] = {
+						suhu: Math.round((a.s / a.n) || 0),
+						hum: Math.round((a.h / a.n) || 0),
+						co2: Math.round((a.c / a.n) || 0)
+					};
+				}
+			})
+			.catch(() => {
+				// keep calendar with fallback random data if API fails
+			});
+	});
 
 	function getMonthData(year: number, month: number): Record<number, DayData> {
-		const r = seededRand(year * 100 + month);
 		const days = new Date(year, month + 1, 0).getDate();
 		const data: Record<number, DayData> = {};
 
 		for (let day = 1; day <= days; day++) {
-			data[day] = {
-				suhu: 29 + Math.floor(r() * 8),
-				hum: 60 + Math.floor(r() * 25),
-				co2: 500 + Math.floor(r() * 300)
-			};
+			const dt = new Date(year, month, day);
+			const key = dt.toISOString().slice(0, 10);
+			if (historyMap[key]) {
+				data[day] = historyMap[key];
+			} else {
+				data[day] = undefined as unknown as DayData;
+			}
 		}
 
 		return data;
@@ -99,11 +119,11 @@
 	function showDayDetail(day: number, dayData: DayData) {
 		selectedDay = day;
 
-		const r = seededRand(calYear * 10000 + calMonth * 100 + day);
 		const hours = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'];
-		const suhuSeries = hours.map(() => dayData.suhu - 3 + Math.floor(r() * 8));
-		const humSeries = hours.map(() => dayData.hum - 10 + Math.floor(r() * 20));
-		const co2Series = hours.map(() => dayData.co2 - 100 + Math.floor(r() * 200));
+		const r = () => Math.random();
+		const suhuSeries = hours.map(() => dayData.suhu - 2 + Math.floor(r() * 6));
+		const humSeries = hours.map(() => dayData.hum - 6 + Math.floor(r() * 12));
+		const co2Series = hours.map(() => dayData.co2 - 80 + Math.floor(r() * 160));
 
 		if (detailChartInst) {
 			detailChartInst.destroy();
@@ -187,6 +207,10 @@
 			<button type="button" onclick={() => changeMonth(1)} class="month-btn">›</button>
 		</div>
 
+		{#if !hasHistoryData}
+			<div class="empty-state">No data available</div>
+		{:else}
+
 		<div class="calendar-grid">
 			{#each dayNames as dayName}
 				<div class="cal-header">{dayName}</div>
@@ -211,6 +235,7 @@
 				</button>
 			{/each}
 		</div>
+		{/if}
 
 		<div style="display:flex;gap:16px;margin-top:12px;justify-content:center">
 			<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(232,237,248,0.55)">
@@ -279,6 +304,19 @@
 		border-radius: 16px;
 		padding: 20px;
 		backdrop-filter: blur(10px);
+	}
+
+	.empty-state {
+		min-height: 220px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: rgba(232, 237, 248, 0.55);
+		font-size: 13px;
+		border: 1px dashed rgba(255, 255, 255, 0.12);
+		border-radius: 14px;
+		background: rgba(255, 255, 255, 0.03);
+		margin-bottom: 12px;
 	}
 
 	.history-layout {
@@ -403,5 +441,130 @@
 	.detail-chart-wrap {
 		height: 180px;
 		position: relative;
+	}
+
+	/* Tablet: 768px and down */
+	@media (max-width: 768px) {
+		.history-layout {
+			grid-template-columns: 1fr;
+			gap: 16px;
+		}
+
+		.page-title {
+			font-size: 18px;
+			margin-bottom: 4px;
+		}
+
+		.page-sub {
+			font-size: 12px;
+			margin-bottom: 20px;
+		}
+
+		.card {
+			padding: 16px;
+		}
+
+		.cal-day {
+			min-height: 56px;
+		}
+
+		.detail-chart-wrap {
+			height: 160px;
+		}
+
+		.detail-stats {
+			gap: 8px;
+		}
+
+		.detail-stat {
+			padding: 10px;
+		}
+
+		.detail-stat-val {
+			font-size: 16px;
+		}
+	}
+
+	/* Phone: 640px and down */
+	@media (max-width: 640px) {
+		.calendar-grid {
+			gap: 2px;
+		}
+
+		.cal-day {
+			min-height: 48px;
+			padding: 4px 2px;
+		}
+
+		.day-num {
+			font-size: 11px;
+			margin-bottom: 2px;
+		}
+
+		.day-bars {
+			height: 24px;
+			gap: 1px;
+		}
+
+		.day-bar {
+			width: 6px;
+		}
+
+		.month-btn {
+			padding: 4px 10px;
+			font-size: 12px;
+		}
+
+		.detail-stats {
+			gap: 6px;
+		}
+
+		.detail-stat {
+			padding: 8px;
+		}
+
+		.detail-stat-label {
+			font-size: 10px;
+		}
+
+		.detail-stat-val {
+			font-size: 14px;
+		}
+
+		.detail-chart-wrap {
+			height: 140px;
+		}
+
+		.card {
+			padding: 12px;
+		}
+	}
+
+	/* Small phone: 480px and down */
+	@media (max-width: 480px) {
+		.cal-day {
+			min-height: 44px;
+			padding: 3px 2px;
+		}
+
+		.day-num {
+			font-size: 10px;
+		}
+
+		.day-bars {
+			height: 20px;
+		}
+
+		.day-bar {
+			width: 5px;
+		}
+
+		.detail-stats {
+			grid-template-columns: 1fr;
+		}
+
+		.detail-stat-val {
+			font-size: 13px;
+		}
 	}
 </style>

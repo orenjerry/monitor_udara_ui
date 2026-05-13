@@ -3,14 +3,55 @@
 	import { Chart, registerables } from 'chart.js';
 	Chart.register(...registerables);
 
+	import { getDashboard } from '$lib/api';
+
+	const DEMO_MAC = 'd4:e9:f4:8a:af:4c'; // Hardcoded MAC for single device
+
 	let dashTime = $state('');
 	let mainChart: Chart;
 	let pieChart: Chart;
+	let dashboardPollId: number | null = null;
+	let dataUpdateCounter = $state(0); // Increment to trigger reactivity
 
-	let labels: string[] = [];
-	let suhuData: number[] = [];
-	let humData: number[] = [];
-	let co2Data: number[] = [];
+	// Regular (non-reactive) chart data - updated directly
+	let chartLabels: string[] = [];
+	let chartSuhuData: number[] = [];
+	let chartHumData: number[] = [];
+	let chartCo2Data: number[] = [];
+
+	// Reactive card values
+	let tempVal = $state(33);
+	let humVal = $state(78);
+	let co2Val = $state(665);
+	
+	// Badge values from API
+	let suhuBadge = $state('—');
+	let humBadge = $state('—');
+	let co2Badge = $state('—');
+
+	// Derived reactive values
+	let status = $derived.by(() => {
+		if (!hasDashboardData) return '--';
+		const v = Number(co2Val ?? 0);
+		if (v >= 1000) return 'Kritis';
+		if (v >= 150) return 'Warning';
+		return 'Normal';
+	});
+
+	let statusClass = $derived.by(() => {
+		if (status === 'Kritis') return 'badge-danger';
+		if (status === 'Warning') return 'badge-warning';
+		if (status === '--') return 'badge-secondary';
+		return 'badge-success';
+	});
+	
+	// Check if data ready based on update counter
+	let hasDashboardData = $derived.by(() => dataUpdateCounter > 0 && chartLabels.length > 0);
+
+	// Display values with "--" when no data
+	let displaySuhu = $derived.by(() => hasDashboardData ? Math.round(tempVal) : '--');
+	let displayHum = $derived.by(() => hasDashboardData ? Math.round(humVal) : '--');
+	let displayCo2 = $derived.by(() => hasDashboardData ? Math.round(co2Val) : '--');
 
 	function updateDashTime() {
 		const now = new Date();
@@ -23,19 +64,63 @@
 		dashTime += ' • ' + now.toLocaleTimeString('id-ID');
 	}
 
-	function generateChartData() {
-		labels = [];
-		suhuData = [];
-		humData = [];
-		co2Data = [];
+	function applyDashboardData(data: {
+		labels: string[];
+		suhuData: number[];
+		humData: number[];
+		co2Data: number[];
+		latest?: { suhu?: number; kelembapan?: number; kualitas_udara?: number } | null;
+		pie?: { suhu?: number; kelembapan?: number; kualitas_udara?: number };
+		badges?: { suhu?: string; kelembapan?: string; co2?: string };
+	}) {
+		// Update non-reactive arrays for Chart.js
+		chartLabels = [...(data.labels ?? [])];
+		chartSuhuData = [...(data.suhuData ?? [])];
+		chartHumData = [...(data.humData ?? [])];
+		chartCo2Data = [...(data.co2Data ?? [])];
 
-		for (let i = 10; i >= 0; i--) {
-			const t = new Date(Date.now() - i * 300000);
-			labels.push(t.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
-			suhuData.push(32 + Math.random() * 2);
-			humData.push(75 + Math.random() * 6);
-			co2Data.push(600 + Math.random() * 120);
+		// Update reactive card values
+		if (data.latest) {
+			if (data.latest.suhu !== undefined) tempVal = Number(data.latest.suhu);
+			if (data.latest.kelembapan !== undefined) humVal = Number(data.latest.kelembapan);
+			if (data.latest.kualitas_udara !== undefined) co2Val = Number(data.latest.kualitas_udara);
 		}
+		
+		// Update badge values from API
+		if (data.badges) {
+			if (data.badges.suhu !== undefined) suhuBadge = data.badges.suhu;
+			if (data.badges.kelembapan !== undefined) humBadge = data.badges.kelembapan;
+			if (data.badges.co2 !== undefined) co2Badge = data.badges.co2;
+		}
+
+		// if canvases were not present during initial mount (no data yet), initialize charts now
+		if (!mainChart && document.getElementById('mainChart')) {
+			initMainChart();
+		}
+		if (!pieChart && document.getElementById('pieChart')) {
+			initPieChart();
+		}
+
+		// Update charts with new data
+		if (mainChart) {
+			mainChart.data.labels = [...chartLabels];
+			mainChart.data.datasets[0].data = [...chartSuhuData];
+			mainChart.data.datasets[1].data = [...chartHumData];
+			mainChart.data.datasets[2].data = chartCo2Data.map((v) => v / 10);
+			mainChart.update();
+		}
+
+		if (pieChart && data.pie) {
+			pieChart.data.datasets[0].data = [
+				Number(data.pie.suhu ?? 0),
+				Number(data.pie.kelembapan ?? 0),
+				Number(data.pie.kualitas_udara ?? 0)
+			];
+			pieChart.update();
+		}
+
+		// Increment counter to trigger reactivity
+		dataUpdateCounter++;
 	}
 
 	function initMainChart() {
@@ -50,11 +135,11 @@
 		mainChart = new Chart(ctx, {
 			type: 'line',
 			data: {
-				labels,
+				labels: chartLabels,
 				datasets: [
 					{
 						label: 'Suhu',
-						data: suhuData,
+						data: chartSuhuData,
 						borderColor: '#f59e0b',
 						backgroundColor: 'rgba(245,158,11,0.05)',
 						tension: 0.4,
@@ -64,7 +149,7 @@
 					},
 					{
 						label: 'Kelembapan',
-						data: humData,
+						data: chartHumData,
 						borderColor: '#38bdf8',
 						backgroundColor: 'rgba(56,189,248,0.05)',
 						tension: 0.4,
@@ -74,7 +159,7 @@
 					},
 					{
 						label: 'CO₂ (/10)',
-						data: co2Data.map((v) => v / 10),
+						data: chartCo2Data.map((v) => v / 10),
 						borderColor: '#22d6a0',
 						backgroundColor: 'rgba(34,214,160,0.05)',
 						tension: 0.4,
@@ -117,7 +202,7 @@
 				labels: ['Suhu', 'Kelembapan', 'CO₂'],
 				datasets: [
 					{
-						data: [33, 78, 66.5],
+						data: [tempVal, humVal, co2Val],
 						backgroundColor: ['#f59e0b', '#38bdf8', '#22d6a0'],
 						borderColor: 'rgba(1,1,63,0.8)',
 						borderWidth: 3
@@ -135,37 +220,37 @@
 
 	onMount(() => {
 		updateDashTime();
-		generateChartData();
+
+	    getDashboard(DEMO_MAC)
+			.then((data) => {
+				applyDashboardData(data);
+			})
+			.catch(() => {
+				// keep empty state if API fails
+			});
 
 		setTimeout(() => {
 			initMainChart();
 			initPieChart();
+
+			// start polling dashboard data every 5s
+			dashboardPollId = window.setInterval(() => {
+				getDashboard(DEMO_MAC)
+					.then((data) => {
+						applyDashboardData(data);
+					})
+					.catch(() => {});
+			}, 2000) as unknown as number;
 		}, 100);
 
 		const timeInterval = setInterval(updateDashTime, 1000);
-		const chartInterval = setInterval(() => {
-			const t = new Date();
-			labels.shift();
-			labels.push(t.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
-			suhuData.shift();
-			suhuData.push(32 + Math.random() * 2);
-			humData.shift();
-			humData.push(75 + Math.random() * 6);
-			co2Data.shift();
-			co2Data.push(600 + Math.random() * 120);
-
-			if (mainChart) {
-				mainChart.data.labels = [...labels];
-				mainChart.data.datasets[0].data = [...suhuData];
-				mainChart.data.datasets[1].data = [...humData];
-				mainChart.data.datasets[2].data = co2Data.map((v) => v / 10);
-				mainChart.update('none');
-			}
-		}, 5000);
 
 		return () => {
 			clearInterval(timeInterval);
-			clearInterval(chartInterval);
+			if (dashboardPollId) {
+				clearInterval(dashboardPollId as number);
+				dashboardPollId = null;
+			}
 			if (mainChart) mainChart.destroy();
 			if (pieChart) pieChart.destroy();
 		};
@@ -182,8 +267,8 @@
 				><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z" /></svg>
 			Suhu
 		</div>
-		<div class="stat-value">33<span class="stat-unit">°C</span></div>
-		<div class="stat-badge badge-warning">▲ +1.2° dari avg</div>
+		<div class="stat-value">{displaySuhu}<span class="stat-unit">°C</span></div>
+		<div class="stat-badge badge-warning">{suhuBadge}</div>
 	</div>
 	<div class="stat-card hum">
 		<div class="stat-label">
@@ -191,8 +276,8 @@
 				><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" /></svg>
 			Kelembapan
 		</div>
-		<div class="stat-value">78<span class="stat-unit">%</span></div>
-		<div class="stat-badge badge-warning">▲ Sedikit tinggi</div>
+		<div class="stat-value">{displayHum}<span class="stat-unit">%</span></div>
+		<div class="stat-badge badge-warning">{humBadge}</div>
 	</div>
 	<div class="stat-card co2">
 		<div class="stat-label">
@@ -200,8 +285,8 @@
 				><circle cx="12" cy="12" r="10" /><path d="M12 8v8M8 12h8" /></svg>
 			CO₂
 		</div>
-		<div class="stat-value">665<span class="stat-unit"> ppm</span></div>
-		<div class="stat-badge badge-danger">⚠ Alert Level</div>
+		<div class="stat-value">{displayCo2}<span class="stat-unit"> ppm</span></div>
+		<div class="stat-badge badge-danger">{co2Badge}</div>
 	</div>
 	<div class="stat-card status">
 		<div class="stat-label">
@@ -209,8 +294,14 @@
 				><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
 			Status
 		</div>
-		<div class="stat-badge badge-danger" style="font-size:13px;padding:6px 12px">Warning</div>
-		<div style="font-size:11px;color:rgba(232,237,248,0.55);margin-top:8px;line-height:1.5">CO₂ melebihi batas aman. Ventilasi diperlukan.</div>
+		<div class="stat-badge {statusClass}" style="font-size:13px;padding:6px 12px">{status}</div>
+		<div style="font-size:11px;color:rgba(232,237,248,0.55);margin-top:8px;line-height:1.5">
+			{#if status === 'Normal'}Kondisi normal.
+			{:else if status === 'Warning'}CO₂ melebihi batas aman. Ventilasi diperlukan.
+			{:else if status === '--'}Data belum tersedia.
+			{:else}CO₂ pada level kritis — segera ambil tindakan.
+			{/if}
+		</div>
 	</div>
 </div>
 
@@ -218,22 +309,30 @@
 	<div class="card">
 		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
 			<span style="font-size:14px;font-weight:600">Tren Real-time</span>
-			<span style="font-size:11px;color:rgba(232,237,248,0.55)">Live • Update tiap 5 detik</span>
+			<span style="font-size:11px;color:rgba(232,237,248,0.55)">Live • Update tiap 2 detik</span>
 		</div>
 		<div class="legend">
 			<div style="display:flex;align-items:center;gap:5px"><div class="legend-dot" style="background:#f59e0b"></div>Suhu</div>
 			<div style="display:flex;align-items:center;gap:5px"><div class="legend-dot" style="background:#38bdf8"></div>Kelembapan</div>
 			<div style="display:flex;align-items:center;gap:5px"><div class="legend-dot" style="background:#22d6a0"></div>CO₂ (/10)</div>
 		</div>
-		<div class="chart-wrap"><canvas id="mainChart"></canvas></div>
+		{#if hasDashboardData}
+			<div class="chart-wrap"><canvas id="mainChart"></canvas></div>
+		{:else}
+			<div class="empty-state">No data available</div>
+		{/if}
 	</div>
 	<div class="card" style="display:flex;flex-direction:column;justify-content:space-between">
 		<div style="font-size:14px;font-weight:600;margin-bottom:12px">Distribusi Rata-rata</div>
-		<div style="position:relative;height:160px"><canvas id="pieChart"></canvas></div>
+		{#if hasDashboardData}
+			<div style="position:relative;height:160px"><canvas id="pieChart"></canvas></div>
+		{:else}
+			<div class="empty-state pie-empty">No data available</div>
+		{/if}
 		<div class="legend" style="margin-top:12px;justify-content:flex-start;flex-direction:column;gap:8px">
-			<div style="display:flex;align-items:center;gap:6px"><div class="legend-dot" style="background:#f59e0b"></div><span style="font-size:12px">Suhu — 33°C</span></div>
-			<div style="display:flex;align-items:center;gap:6px"><div class="legend-dot" style="background:#38bdf8"></div><span style="font-size:12px">Kelembapan — 78%</span></div>
-			<div style="display:flex;align-items:center;gap:6px"><div class="legend-dot" style="background:#22d6a0;margin-left:0"></div><span style="font-size:12px;margin-left:6px">CO₂ — 665 ppm</span></div>
+			<div style="display:flex;align-items:center;gap:6px"><div class="legend-dot" style="background:#f59e0b"></div><span style="font-size:12px">Suhu — {displaySuhu}°C</span></div>
+			<div style="display:flex;align-items:center;gap:6px"><div class="legend-dot" style="background:#38bdf8"></div><span style="font-size:12px">Kelembapan — {displayHum}%</span></div>
+			<div style="display:flex;align-items:center;gap:6px"><div class="legend-dot" style="background:#22d6a0;margin-left:0"></div><span style="font-size:12px;margin-left:6px">CO₂ — {displayCo2} ppm</span></div>
 		</div>
 	</div>
 </div>
@@ -347,6 +446,16 @@
 		color: #f43f5e;
 	}
 
+	.badge-success {
+		background: rgba(34, 214, 160, 0.2);
+		color: #22d6a0;
+	}
+
+	.badge-secondary {
+		background: rgba(232, 237, 248, 0.1);
+		color: rgba(232, 237, 248, 0.55);
+	}
+
 	.charts-row {
 		display: grid;
 		grid-template-columns: 1fr 280px;
@@ -356,6 +465,23 @@
 	.chart-wrap {
 		position: relative;
 		height: 260px;
+	}
+
+	.empty-state {
+		min-height: 260px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: rgba(232, 237, 248, 0.55);
+		font-size: 13px;
+		border: 1px dashed rgba(255, 255, 255, 0.12);
+		border-radius: 14px;
+		background: rgba(255, 255, 255, 0.03);
+	}
+
+	.pie-empty {
+		height: 160px;
+		min-height: 160px;
 	}
 
 	.legend {
@@ -373,5 +499,153 @@
 		border-radius: 2px;
 		flex-shrink: 0;
 		margin-top: 2px;
+	}
+
+	/* Tablet: 768px and down */
+	@media (max-width: 768px) {
+		.stats-grid {
+			grid-template-columns: repeat(2, 1fr);
+			gap: 12px;
+			margin-bottom: 16px;
+		}
+
+		.stat-card {
+			padding: 14px 16px;
+		}
+
+		.stat-value {
+			font-size: 24px;
+		}
+
+		.stat-label {
+			font-size: 11px;
+			margin-bottom: 6px;
+		}
+
+		.stat-unit {
+			font-size: 12px;
+		}
+
+		.charts-row {
+			grid-template-columns: 1fr;
+			gap: 12px;
+		}
+
+		.chart-wrap {
+			height: 220px;
+		}
+
+		.empty-state {
+			min-height: 220px;
+		}
+
+		.page-title {
+			font-size: 18px;
+			margin-bottom: 4px;
+		}
+
+		.page-sub {
+			font-size: 12px;
+			margin-bottom: 20px;
+		}
+
+		.legend {
+			gap: 12px;
+			font-size: 11px;
+		}
+
+		.card {
+			padding: 16px;
+		}
+	}
+
+	/* Phone: 480px and down */
+	@media (max-width: 480px) {
+		.stats-grid {
+			grid-template-columns: 1fr;
+			gap: 10px;
+			margin-bottom: 12px;
+		}
+
+		.stat-card {
+			padding: 12px 14px;
+		}
+
+		.stat-value {
+			font-size: 20px;
+		}
+
+		.stat-label {
+			font-size: 10px;
+			margin-bottom: 4px;
+			gap: 4px;
+		}
+
+		.stat-label svg {
+			width: 12px;
+			height: 12px;
+		}
+
+		.stat-unit {
+			font-size: 11px;
+		}
+
+		.stat-badge {
+			padding: 3px 8px;
+			font-size: 10px;
+			margin-top: 6px;
+		}
+
+		.charts-row {
+			grid-template-columns: 1fr;
+			gap: 10px;
+		}
+
+		.chart-wrap {
+			height: 180px;
+		}
+
+		.empty-state {
+			min-height: 180px;
+			font-size: 12px;
+		}
+
+		.pie-empty {
+			height: 140px;
+			min-height: 140px;
+		}
+
+		.page-title {
+			font-size: 16px;
+			margin-bottom: 2px;
+		}
+
+		.page-sub {
+			font-size: 11px;
+			margin-bottom: 16px;
+		}
+
+		.card {
+			padding: 12px;
+			border-radius: 12px;
+		}
+
+		.legend {
+			gap: 10px;
+			font-size: 10px;
+			flex-direction: column;
+			margin-bottom: 6px;
+		}
+
+		.legend-dot {
+			width: 8px;
+			height: 8px;
+			margin-top: 1px;
+		}
+
+		.stat-card::before {
+			width: 60px;
+			height: 60px;
+		}
 	}
 </style>

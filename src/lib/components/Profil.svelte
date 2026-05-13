@@ -139,4 +139,107 @@
 		color: rgba(232, 237, 248, 0.55);
 		margin-top: 16px;
 	}
+
+	/* Tablet: 768px and down */
+	@media (max-width: 768px) {
+		.page-title {
+			font-size: 18px;
+			margin-bottom: 4px;
+		}
+
+		.page-sub {
+			font-size: 12px;
+			margin-bottom: 20px;
+		}
+
+		.card {
+			padding: 16px;
+		}
+
+		.profil-grid {
+			grid-template-columns: repeat(2, 1fr);
+			gap: 12px;
+		}
+
+		.member-card {
+			padding: 18px;
+		}
+
+		.member-avatar {
+			width: 56px;
+			height: 56px;
+			font-size: 20px;
+			margin-bottom: 10px;
+		}
+
+		.member-name {
+			font-size: 13px;
+		}
+
+		.member-id {
+			font-size: 11px;
+		}
+	}
+
+	/* Phone: 640px and down */
+	@media (max-width: 640px) {
+		.profil-grid {
+			grid-template-columns: 1fr;
+			gap: 10px;
+		}
+
+		.member-card {
+			padding: 14px;
+		}
+
+		.member-avatar {
+			width: 48px;
+			height: 48px;
+			font-size: 18px;
+		}
+
+		.member-name {
+			font-size: 12px;
+			margin-bottom: 2px;
+		}
+
+		.member-id {
+			font-size: 10px;
+		}
+
+		.member-status {
+			font-size: 10px;
+			padding: 3px 8px;
+		}
+
+		.card {
+			padding: 12px;
+		}
+
+		.sync-info {
+			font-size: 10px;
+		}
+	}
+
+	/* Small phone: 480px and down */
+	@media (max-width: 480px) {
+		.member-avatar {
+			width: 40px;
+			height: 40px;
+			font-size: 16px;
+		}
+
+		.member-name {
+			font-size: 11px;
+		}
+
+		.member-card {
+			padding: 10px;
+		}
+
+		.member-status span {
+			width: 4px;
+			height: 4px;
+		}
+	}
 </style>

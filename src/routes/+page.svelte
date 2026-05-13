@@ -59,7 +59,7 @@
 		color: var(--text);
 		min-height: 100vh;
 		display: flex;
-		overflow: hidden;
+		overflow: auto;
 	}
 
 	:global(::-webkit-scrollbar) {
@@ -78,25 +78,24 @@
 	.app-container {
 		display: flex;
 		width: 100%;
-		height: 100vh;
+		min-height: 100vh;
 	}
 
 	.main {
 		flex: 1;
-		overflow: hidden;
+		overflow-y: auto;
 		position: relative;
 	}
 
 	.page {
-		position: absolute;
-		inset: 0;
-		overflow-y: auto;
+		position: relative;
 		padding: 32px;
 		opacity: 0;
 		transform: translateX(30px);
 		transition: opacity 0.4s ease, transform 0.4s ease;
 		pointer-events: none;
 		visibility: hidden;
+		display: none;
 	}
 
 	.page.active {
@@ -104,5 +103,63 @@
 		transform: translateX(0);
 		pointer-events: all;
 		visibility: visible;
+		display: block;
+	}
+
+	/* Tablet: 768px and down */
+	@media (max-width: 768px) {
+		:global(body) {
+			flex-direction: column;
+		}
+
+		.app-container {
+			flex-direction: column;
+			height: auto;
+			min-height: 100vh;
+		}
+
+		.main {
+			flex: 1;
+			overflow: auto;
+		}
+
+		.page {
+			position: relative;
+			inset: auto;
+			overflow: visible;
+			padding: 24px 16px;
+			opacity: 1;
+			transform: none;
+			pointer-events: all;
+			visibility: visible;
+			display: block;
+		}
+
+		.page.active {
+			opacity: 1;
+			transform: none;
+			pointer-events: all;
+			visibility: visible;
+			display: block;
+		}
+	}
+
+	/* Phone: 640px and down */
+	@media (max-width: 640px) {
+		.main {
+			padding-bottom: 70px;
+			overflow: auto;
+		}
+
+		.page {
+			padding: 20px 14px 90px;
+		}
+	}
+
+	/* Small phone: 480px and down */
+	@media (max-width: 480px) {
+		.page {
+			padding: 16px 12px 90px;
+		}
 	}
 </style>

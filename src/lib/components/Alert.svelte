@@ -1,5 +1,12 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { getWarnings, dismissWarning } from '$lib/api';
+	import { alertCount } from '$lib/stores';
+
+	const DEMO_MAC = 'd4:e9:f4:8a:af:4c'; // Hardcoded MAC for single device
+
 	interface AlertItem {
+		id: number;
 		type: 'co2-alert' | 'temp-alert' | 'hum-alert' | 'pm-alert';
 		icon: string;
 		time: string;
@@ -7,67 +14,50 @@
 		room: string;
 	}
 
-	const allAlerts: AlertItem[] = [
-		{
-			type: 'co2-alert',
-			icon: '🌫',
-			time: '07:05:34',
-			msg: 'CO₂ level di 685 ppm (Alert Level)',
-			room: 'Room B'
-		},
-		{
-			type: 'temp-alert',
-			icon: '🌡',
-			time: '07:02:02',
-			msg: 'Suhu di 33.8°C (Melebihi Batas)',
-			room: 'Server Room'
-		},
-		{
-			type: 'hum-alert',
-			icon: '💧',
-			time: '06:34:55',
-			msg: 'Kelembapan di 81% (Alert Level)',
-			room: 'Room C'
-		},
-		{
-			type: 'pm-alert',
-			icon: '🌿',
-			time: '06:01:23',
-			msg: 'PM2.5 level tinggi 45 μg/m³',
-			room: 'Front Office'
-		},
-		{
-			type: 'co2-alert',
-			icon: '🌫',
-			time: '05:48:10',
-			msg: 'CO₂ level di 710 ppm (Alert Level)',
-			room: 'Meeting Room'
-		},
-		{
-			type: 'temp-alert',
-			icon: '🌡',
-			time: '05:22:44',
-			msg: 'Suhu di 35°C (Kritis)',
-			room: 'Data Center'
-		},
-		{
-			type: 'hum-alert',
-			icon: '💧',
-			time: '04:55:30',
-			msg: 'Kelembapan di 88% (Sangat Tinggi)',
-			room: 'Warehouse'
-		}
-	];
-
+	let allAlerts = $state<AlertItem[]>([]);
 	const MAX_VISIBLE = 4;
-	const visibleAlerts = allAlerts.slice(0, MAX_VISIBLE);
-	const hiddenAlerts = allAlerts.slice(MAX_VISIBLE);
+	let visibleAlerts = $derived.by(() => allAlerts.slice(0, MAX_VISIBLE));
+	let hiddenAlerts = $derived.by(() => allAlerts.slice(MAX_VISIBLE));
 
 	let showingMore = $state(false);
 
 	function toggleMoreAlerts() {
 		showingMore = !showingMore;
 	}
+
+	async function handleDismiss(alert: AlertItem) {
+		try {
+			await dismissWarning(alert.id);
+			// Remove from list
+			allAlerts = allAlerts.filter((a) => a.id !== alert.id);
+			// Update badge count
+			alertCount.set(allAlerts.length);
+		} catch (err) {
+			console.error('Failed to dismiss warning:', err);
+		}
+	}
+
+	onMount(() => {
+		getWarnings(DEMO_MAC)
+			.then((rows: any[]) => {
+				allAlerts = rows.map((r) => {
+					const time = new Date(r.end_date || r.start_date || Date.now()).toLocaleTimeString('id-ID');
+					return {
+						id: r.id,
+						type: 'co2-alert',
+						icon: '🌫',
+						time,
+						msg: `Kualitas udara ${Math.round(r.value ?? r.kualitas_udara ?? 0)} (peringatan)`,
+						room: String(r.mac_address ?? 'Unknown')
+					} as AlertItem;
+				}).reverse();
+				// Update badge count
+				alertCount.set(allAlerts.length);
+			})
+			.catch(() => {
+				// keep static state if API fails
+			});
+	});
 </script>
 
 <div class="page-title">Alert</div>
@@ -80,20 +70,33 @@
 	</div>
 
 	<div class="alert-list">
-		{#each visibleAlerts as alert, idx}
-			<div class="alert-item {alert.type}" style="animation-delay:{idx * 0.05}s">
-				<div class="alert-icon"><span style="font-size:20px">{alert.icon}</span></div>
-				<div style="flex:1">
-					<div class="alert-time">{alert.time}</div>
-					<div class="alert-msg">{alert.msg}</div>
-					<div class="alert-room">📍 {alert.room}</div>
+		{#if visibleAlerts.length > 0}
+			{#each visibleAlerts as alert, idx}
+				<div class="alert-item {alert.type}" style="animation-delay:{idx * 0.05}s">
+					<div class="alert-icon"><span style="font-size:20px">{alert.icon}</span></div>
+					<div style="flex:1">
+						<div class="alert-time">{alert.time}</div>
+						<div class="alert-msg">{alert.msg}</div>
+						<div class="alert-room">📍 {alert.room}</div>
+					</div>
+					<div style="display:flex; gap:8px; align-items:center; flex-shrink:0">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="2.5">
+							<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+							<line x1="12" y1="9" x2="12" y2="13" />
+						</svg>
+						<button
+							class="dismiss-btn"
+							onclick={() => handleDismiss(alert)}
+							title="Dismiss"
+						>
+							✕
+						</button>
+					</div>
 				</div>
-				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="2.5">
-					<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-					<line x1="12" y1="9" x2="12" y2="13" />
-				</svg>
-			</div>
-		{/each}
+			{/each}
+		{:else}
+			<div class="empty-state">No data available</div>
+		{/if}
 	</div>
 
 	{#if showingMore}
@@ -106,10 +109,19 @@
 						<div class="alert-msg">{alert.msg}</div>
 						<div class="alert-room">📍 {alert.room}</div>
 					</div>
-					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="2.5">
-						<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-						<line x1="12" y1="9" x2="12" y2="13" />
-					</svg>
+					<div style="display:flex; gap:8px; align-items:center; flex-shrink:0">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="2.5">
+							<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+							<line x1="12" y1="9" x2="12" y2="13" />
+						</svg>
+						<button
+							class="dismiss-btn"
+							onclick={() => handleDismiss(alert)}
+							title="Dismiss"
+						>
+							✕
+						</button>
+					</div>
 				</div>
 			{/each}
 		</div>
@@ -160,6 +172,18 @@
 		flex-direction: column;
 		gap: 12px;
 		margin-bottom: 12px;
+	}
+
+	.empty-state {
+		min-height: 120px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: rgba(232, 237, 248, 0.55);
+		font-size: 13px;
+		border: 1px dashed rgba(255, 255, 255, 0.12);
+		border-radius: 12px;
+		background: rgba(255, 255, 255, 0.03);
 	}
 
 	.alert-item {
@@ -252,6 +276,36 @@
 		display: flex;
 	}
 
+	.show-more-btn:hover {
+		background: rgba(255, 255, 255, 0.08);
+		color: #e8edf8;
+	}
+
+	.dismiss-btn {
+		width: 28px;
+		height: 28px;
+		border-radius: 6px;
+		background: rgba(244, 63, 94, 0.15);
+		border: 1px solid rgba(244, 63, 94, 0.3);
+		color: #f43f5e;
+		font-weight: 600;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: all 0.2s;
+		font-size: 14px;
+	}
+
+	.dismiss-btn:hover {
+		background: rgba(244, 63, 94, 0.25);
+		border-color: rgba(244, 63, 94, 0.5);
+	}
+
+	.dismiss-btn:active {
+		transform: scale(0.95);
+	}
+
 	.show-more-btn {
 		display: flex;
 		align-items: center;
@@ -282,5 +336,124 @@
 		border-radius: 20px;
 		font-size: 11px;
 		font-weight: 700;
+	}
+
+	/* Tablet: 768px and down */
+	@media (max-width: 768px) {
+		.page-title {
+			font-size: 18px;
+			margin-bottom: 4px;
+		}
+
+		.page-sub {
+			font-size: 12px;
+			margin-bottom: 20px;
+		}
+
+		.card {
+			padding: 16px;
+		}
+
+		.alert-item {
+			gap: 12px;
+			padding: 14px 16px;
+		}
+
+		.alert-icon {
+			width: 36px;
+			height: 36px;
+		}
+
+		.alert-msg {
+			font-size: 13px;
+		}
+
+		.alert-time,
+		.alert-room {
+			font-size: 11px;
+		}
+	}
+
+	/* Phone: 640px and down */
+	@media (max-width: 640px) {
+		.alert-item {
+			gap: 10px;
+			padding: 12px 14px;
+		}
+
+		.alert-icon {
+			width: 32px;
+			height: 32px;
+		}
+
+		.alert-msg {
+			font-size: 12px;
+		}
+
+		.alert-time,
+		.alert-room {
+			font-size: 10px;
+		}
+
+		.show-more-btn {
+			padding: 12px;
+			font-size: 12px;
+		}
+
+		.alert-count-badge {
+			font-size: 10px;
+			padding: 2px 6px;
+		}
+
+		.card {
+			padding: 12px;
+		}
+
+		.alert-list {
+			gap: 10px;
+		}
+
+		.hidden-alerts {
+			gap: 10px;
+		}
+	}
+
+	/* Small phone: 480px and down */
+	@media (max-width: 480px) {
+		.alert-item {
+			gap: 8px;
+			padding: 10px 12px;
+		}
+
+		.alert-icon {
+			width: 28px;
+			height: 28px;
+		}
+
+		.alert-msg {
+			font-size: 11px;
+		}
+
+		.show-more-btn {
+			padding: 10px;
+			font-size: 11px;
+			gap: 6px;
+		}
+
+		svg {
+			width: 12px;
+			height: 12px;
+		}
+
+		.alert-item svg {
+			width: 12px;
+			height: 12px;
+		}
+
+		.dismiss-btn {
+			width: 24px;
+			height: 24px;
+			font-size: 12px;
+		}
 	}
 </style>

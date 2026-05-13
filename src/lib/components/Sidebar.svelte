@@ -1,14 +1,18 @@
 <script lang="ts">
-	import { currentPage } from '../stores';
+	import { currentPage, alertCount } from '../stores';
+	import { getWarningsCount } from '$lib/api';
+	import { onMount } from 'svelte';
 
-	const pages = [
+	type PageId = 'dashboard' | 'history' | 'alert' | 'profil';
+
+	const DEMO_MAC = 'd4:e9:f4:8a:af:4c'; // Hardcoded MAC for single device
+
+	const pages: Array<{ id: PageId; label: string; icon: string }> = [
 		{ id: 'dashboard', label: 'Dashboard', icon: 'grid' },
 		{ id: 'history', label: 'History', icon: 'clock' },
 		{ id: 'alert', label: 'Alert', icon: 'bell' },
 		{ id: 'profil', label: 'Profil Anggota', icon: 'users' }
 	];
-
-	let alertCount = 7;
 
 	function getIcon(type: string) {
 		const icons: Record<string, string> = {
@@ -21,6 +25,22 @@
 		};
 		return icons[type] || '';
 	}
+
+	onMount(() => {
+		// Fetch initial warning count
+		getWarningsCount(DEMO_MAC)
+			.then((count) => alertCount.set(count))
+			.catch(() => alertCount.set(0));
+
+		// Poll for warning count updates every 10 seconds
+		const interval = setInterval(() => {
+			getWarningsCount(DEMO_MAC)
+				.then((count) => alertCount.set(count))
+				.catch(() => {});
+		}, 10000);
+
+		return () => clearInterval(interval);
+	});
 </script>
 
 <nav class="sidebar">
@@ -46,7 +66,7 @@
 			</svg>
 			{page.label}
 			{#if page.id === 'alert'}
-				<span class="alert-badge">{alertCount}</span>
+				<span class="alert-badge">{$alertCount}</span>
 			{/if}
 		</div>
 	{/each}
@@ -130,5 +150,116 @@
 		font-weight: 700;
 		padding: 2px 7px;
 		border-radius: 10px;
+	}
+
+	/* Tablet: 768px and down */
+	@media (max-width: 768px) {
+		.sidebar {
+			width: 200px;
+			padding: 20px 0;
+		}
+
+		.sidebar-logo {
+			padding: 0 20px 24px;
+			font-size: 14px;
+			gap: 8px;
+		}
+
+		.sidebar-logo-icon {
+			width: 28px;
+			height: 28px;
+		}
+
+		.nav-item {
+			padding: 10px 20px;
+			font-size: 13px;
+			gap: 10px;
+			margin: 2px 8px;
+		}
+
+		.alert-badge {
+			font-size: 9px;
+			padding: 1px 5px;
+		}
+	}
+
+	/* Phone: 640px and down - Bottom Navigation */
+	@media (max-width: 640px) {
+		.sidebar {
+			width: 100%;
+			min-height: auto;
+			border-right: none;
+			border-top: 1px solid rgba(255, 255, 255, 0.12);
+			flex-direction: row;
+			padding: 0;
+			align-items: center;
+			justify-content: space-around;
+			position: fixed;
+			bottom: 0;
+			left: 0;
+			right: 0;
+			background: rgba(0, 0, 0, 0.5);
+			backdrop-filter: blur(10px);
+			z-index: 1000;
+			height: 70px;
+		}
+
+		.sidebar-logo {
+			display: none;
+		}
+
+		.nav-item {
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 4px;
+			padding: 8px 12px;
+			margin: 0;
+			font-size: 11px;
+			border-radius: 8px;
+			min-width: 60px;
+			text-align: center;
+		}
+
+		.nav-item:hover {
+			background: rgba(255, 255, 255, 0.05);
+		}
+
+		.nav-item.active {
+			box-shadow: 0 2px 12px rgba(79, 142, 247, 0.3);
+		}
+
+		.nav-icon {
+			width: 20px;
+			height: 20px;
+		}
+
+		.alert-badge {
+			margin-left: 0;
+			position: absolute;
+			top: 2px;
+			right: 2px;
+			font-size: 8px;
+			padding: 1px 4px;
+		}
+	}
+
+	/* Small phone: 480px and down */
+	@media (max-width: 480px) {
+		.nav-item {
+			padding: 6px 8px;
+			min-width: 50px;
+			font-size: 10px;
+		}
+
+		.nav-icon {
+			width: 18px;
+			height: 18px;
+		}
+
+		.alert-badge {
+			font-size: 7px;
+			padding: 1px 3px;
+		}
 	}
 </style>
