@@ -1,6 +1,6 @@
 // Determine API base URL based on how the app is accessed
 function getAPIBase(): string {
-  return 'http://alpha.prowcloud.my.id:26001';
+  return 'https://api-tunnel.toxipl21.workers.dev';
 }
 
 export const API_BASE = getAPIBase();
