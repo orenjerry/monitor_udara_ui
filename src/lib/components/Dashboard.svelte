@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { Chart, registerables } from 'chart.js';
 	Chart.register(...registerables);
 	import { getDashboard } from '$lib/api';
@@ -13,15 +13,18 @@
 	let pieChart: Chart;
 	let dashboardPollId: number | null = null;
 
-	// State lokal untuk UI
 	let chartLabels = $state<string[]>([]);
 	let chartSuhuData: number[] = [];
 	let chartHumData: number[] = [];
 	let chartCo2Data: number[] = [];
 
-	let tempVal = $state(33);
-	let humVal = $state(78);
-	let co2Val = $state(665);
+	let tempVal = $state(0);
+	let humVal = $state(0);
+	let co2Val = $state(0);
+
+	let suhuBadge = $state('—');
+	let humBadge = $state('—');
+	let co2Badge = $state('—');
 
 	let hasDashboardData = $derived(chartLabels.length > 0);
 
@@ -110,8 +113,10 @@
 		}) + ' • ' + now.toLocaleTimeString('id-ID');
 	}
 
-	function applyDashboardData(data: any) {
+    // [PERBAIKAN] Ubah jadi async function untuk menggunakan await tick()
+	async function applyDashboardData(data: any) {
 		if (!data) return;
+
 		dashboardCache.set(data);
 
 		chartLabels = data.labels ?? [];
@@ -124,6 +129,18 @@
 			humVal = Number(data.latest.kelembapan ?? 0);
 			co2Val = Number(data.latest.kualitas_udara ?? 0);
 		}
+		
+		if (data.badges) {
+			if (data.badges.suhu !== undefined) suhuBadge = data.badges.suhu;
+			if (data.badges.kelembapan !== undefined) humBadge = data.badges.kelembapan;
+			if (data.badges.co2 !== undefined) co2Badge = data.badges.co2;
+		}
+
+        // [KUNCI NYA DI SINI]: Tunggu sampai Svelte selesai menggambar <canvas> ke HTML sebelum lanjut ke Chart.js
+		await tick();
+
+		if (!mainChart && document.getElementById('mainChart')) initMainChart();
+		if (!pieChart && document.getElementById('pieChart')) initPieChart();
 
 		if (mainChart) {
 			mainChart.data.labels = [...chartLabels];
@@ -139,7 +156,7 @@
 				Number(data.pie.kelembapan ?? 0),
 				Number(data.pie.kualitas_udara ?? 0)
 			];
-			pieChart.update();
+			pieChart.update('none');
 		}
 	}
 
@@ -232,22 +249,19 @@
 		});
 	}
 
-onMount(() => {
+	onMount(() => {
 		updateDashTime();
 
 		const cached = get(dashboardCache);
 		if (cached) {
 			applyDashboardData(cached);
-			setTimeout(() => {
-				initMainChart();
-				initPieChart();
-			}, 0);
 		}
 
 	    getDashboard(DEMO_MAC)
 			.then(applyDashboardData)
 			.catch(console.error);
 
+        // [PERBAIKAN] Tidak butuh setTimeout aneh lagi di sini karena sudah ditangani tick()
 		dashboardPollId = window.setInterval(() => {
 			getDashboard(DEMO_MAC).then(applyDashboardData).catch(() => {});
 		}, 2000) as unknown as number;
