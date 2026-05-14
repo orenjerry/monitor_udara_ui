@@ -5,7 +5,7 @@
 
 	import { getDashboard } from '$lib/api';
 
-	const DEMO_MAC = 'D4:E9:F4:8A:AF:4C'; // Hardcoded MAC for single device
+	const DEMO_MAC = 'D4:E9:F4:8A:AF:4C';
 
 	let dashTime = $state('');
 	let mainChart: Chart;

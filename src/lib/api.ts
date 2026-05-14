@@ -5,6 +5,9 @@ function getAPIBase(): string {
 
 export const API_BASE = getAPIBase();
 
+function normalizeMac(mac?: string): string | undefined {
+  return mac ? String(mac).toUpperCase() : undefined;
+}
 async function request(path: string) {
   const res = await fetch(`${API_BASE}${path}`);
   if (!res.ok) throw new Error(await res.text());
@@ -12,25 +15,25 @@ async function request(path: string) {
 }
 
 export async function getRealtime(mac?: string) {
-  const q = mac ? `?mac_address=${encodeURIComponent(mac)}` : '';
+  const q = mac ? `?mac_address=${encodeURIComponent(normalizeMac(mac))}` : '';
   const data = await request(`/api/v1/realtime${q}`);
   return data.data ?? data;
 }
 
 export async function getHistory(mac?: string) {
-  const q = mac ? `?mac_address=${encodeURIComponent(mac)}` : '';
+  const q = mac ? `?mac_address=${encodeURIComponent(normalizeMac(mac))}` : '';
   const data = await request(`/api/v1/history${q}`);
   return data.data ?? data;
 }
 
 export async function getWarnings(mac?: string) {
-  const q = mac ? `?mac_address=${encodeURIComponent(mac)}` : '';
+  const q = mac ? `?mac_address=${encodeURIComponent(normalizeMac(mac))}` : '';
   const data = await request(`/api/v1/warnings${q}`);
   return data.data ?? data;
 }
 
 export async function getWarningsCount(mac?: string) {
-  const q = mac ? `?mac_address=${encodeURIComponent(mac)}` : '';
+  const q = mac ? `?mac_address=${encodeURIComponent(normalizeMac(mac))}` : '';
   const data = await request(`/api/v1/warnings/count${q}`);
   return data.count ?? 0;
 }
@@ -56,7 +59,7 @@ export async function dismissWarningsBulk(ids: number[]) {
 }
 
 export async function getDashboard(mac?: string) {
-  const q = mac ? `?mac_address=${encodeURIComponent(mac)}` : '';
+  const q = mac ? `?mac_address=${encodeURIComponent(normalizeMac(mac))}` : '';
   const data = await request(`/api/v1/dashboard${q}`);
   return data.data ?? data;
 }
