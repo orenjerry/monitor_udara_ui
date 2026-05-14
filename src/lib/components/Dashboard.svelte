@@ -2,8 +2,9 @@
 	import { onMount } from 'svelte';
 	import { Chart, registerables } from 'chart.js';
 	Chart.register(...registerables);
-
 	import { getDashboard } from '$lib/api';
+	import { dashboardCache } from '$lib/stores';
+	import { get } from 'svelte/store';
 
 	const DEMO_MAC = 'D4:E9:F4:8A:AF:4C';
 
@@ -11,25 +12,19 @@
 	let mainChart: Chart;
 	let pieChart: Chart;
 	let dashboardPollId: number | null = null;
-	let dataUpdateCounter = $state(0); // Increment to trigger reactivity
 
-	// Regular (non-reactive) chart data - updated directly
-	let chartLabels: string[] = [];
+	// State lokal untuk UI
+	let chartLabels = $state<string[]>([]);
 	let chartSuhuData: number[] = [];
 	let chartHumData: number[] = [];
 	let chartCo2Data: number[] = [];
 
-	// Reactive card values
 	let tempVal = $state(33);
 	let humVal = $state(78);
 	let co2Val = $state(665);
-	
-	// Badge values from API
-	let suhuBadge = $state('—');
-	let humBadge = $state('—');
-	let co2Badge = $state('—');
 
-	// Derived reactive values
+	let hasDashboardData = $derived(chartLabels.length > 0);
+
 	let status = $derived.by(() => {
 		if (!hasDashboardData) return '--';
 		const v = Number(co2Val ?? 0);
@@ -44,16 +39,11 @@
 		if (status === '--') return 'badge-secondary';
 		return 'badge-success';
 	});
-	
-	// Check if data ready based on update counter
-	let hasDashboardData = $derived.by(() => dataUpdateCounter > 0 && chartLabels.length > 0);
 
-	// Display values with "--" when no data
-	let displaySuhu = $derived.by(() => hasDashboardData ? Math.round(tempVal) : '--');
-	let displayHum = $derived.by(() => hasDashboardData ? Math.round(humVal) : '--');
-	let displayCo2 = $derived.by(() => hasDashboardData ? Math.round(co2Val) : '--');
+	let displaySuhu = $derived(hasDashboardData ? Math.round(tempVal) : '--');
+	let displayHum = $derived(hasDashboardData ? Math.round(humVal) : '--');
+	let displayCo2 = $derived(hasDashboardData ? Math.round(co2Val) : '--');
 
-	// CO2 category and badge class based on ppm guidance
 	let co2Category = $derived.by(() => {
 		if (!hasDashboardData) return '--';
 		const v = Number(co2Val ?? 0);
@@ -74,7 +64,6 @@
 		return 'badge-danger';
 	});
 
-	// Temperature category and badge class
 	let tempCategory = $derived.by(() => {
 		if (!hasDashboardData) return '--';
 		const v = Number(tempVal ?? 0);
@@ -94,7 +83,6 @@
 		return 'badge-hot';
 	});
 
-	// Humidity category and badge class
 	let humCategory = $derived.by(() => {
 		if (!hasDashboardData) return '--';
 		const v = Number(humVal ?? 0);
@@ -119,54 +107,30 @@
 			day: 'numeric',
 			month: 'long',
 			year: 'numeric'
-		});
-		dashTime += ' • ' + now.toLocaleTimeString('id-ID');
+		}) + ' • ' + now.toLocaleTimeString('id-ID');
 	}
 
-	function applyDashboardData(data: {
-		labels: string[];
-		suhuData: number[];
-		humData: number[];
-		co2Data: number[];
-		latest?: { suhu?: number; kelembapan?: number; kualitas_udara?: number } | null;
-		pie?: { suhu?: number; kelembapan?: number; kualitas_udara?: number };
-		badges?: { suhu?: string; kelembapan?: string; co2?: string };
-	}) {
-		// Update non-reactive arrays for Chart.js
-		chartLabels = [...(data.labels ?? [])];
-		chartSuhuData = [...(data.suhuData ?? [])];
-		chartHumData = [...(data.humData ?? [])];
-		chartCo2Data = [...(data.co2Data ?? [])];
+	function applyDashboardData(data: any) {
+		if (!data) return;
+		dashboardCache.set(data);
 
-		// Update reactive card values
+		chartLabels = data.labels ?? [];
+		chartSuhuData = data.suhuData ?? [];
+		chartHumData = data.humData ?? [];
+		chartCo2Data = data.co2Data ?? [];
+
 		if (data.latest) {
-			if (data.latest.suhu !== undefined) tempVal = Number(data.latest.suhu);
-			if (data.latest.kelembapan !== undefined) humVal = Number(data.latest.kelembapan);
-			if (data.latest.kualitas_udara !== undefined) co2Val = Number(data.latest.kualitas_udara);
-		}
-		
-		// Update badge values from API
-		if (data.badges) {
-			if (data.badges.suhu !== undefined) suhuBadge = data.badges.suhu;
-			if (data.badges.kelembapan !== undefined) humBadge = data.badges.kelembapan;
-			if (data.badges.co2 !== undefined) co2Badge = data.badges.co2;
+			tempVal = Number(data.latest.suhu ?? 0);
+			humVal = Number(data.latest.kelembapan ?? 0);
+			co2Val = Number(data.latest.kualitas_udara ?? 0);
 		}
 
-		// if canvases were not present during initial mount (no data yet), initialize charts now
-		if (!mainChart && document.getElementById('mainChart')) {
-			initMainChart();
-		}
-		if (!pieChart && document.getElementById('pieChart')) {
-			initPieChart();
-		}
-
-		// Update charts with new data
 		if (mainChart) {
 			mainChart.data.labels = [...chartLabels];
 			mainChart.data.datasets[0].data = [...chartSuhuData];
 			mainChart.data.datasets[1].data = [...chartHumData];
 			mainChart.data.datasets[2].data = chartCo2Data.map((v) => v / 10);
-			mainChart.update();
+			mainChart.update('none');
 		}
 
 		if (pieChart && data.pie) {
@@ -177,17 +141,12 @@
 			];
 			pieChart.update();
 		}
-
-		// Increment counter to trigger reactivity
-		dataUpdateCounter++;
 	}
 
 	function initMainChart() {
 		const canvas = document.getElementById('mainChart') as HTMLCanvasElement;
 		if (!canvas) return;
-
 		if (mainChart) mainChart.destroy();
-
 		const ctx = canvas.getContext('2d');
 		if (!ctx) return;
 
@@ -249,9 +208,7 @@
 	function initPieChart() {
 		const canvas = document.getElementById('pieChart') as HTMLCanvasElement;
 		if (!canvas) return;
-
 		if (pieChart) pieChart.destroy();
-
 		const ctx = canvas.getContext('2d');
 		if (!ctx) return;
 
@@ -259,14 +216,12 @@
 			type: 'doughnut',
 			data: {
 				labels: ['Suhu', 'Kelembapan', 'CO₂'],
-				datasets: [
-					{
-						data: [tempVal, humVal, co2Val],
-						backgroundColor: ['#f59e0b', '#38bdf8', '#22d6a0'],
-						borderColor: 'rgba(1,1,63,0.8)',
-						borderWidth: 3
-					}
-				]
+				datasets: [{
+					data: [tempVal, humVal, co2Val],
+					backgroundColor: ['#f59e0b', '#38bdf8', '#22d6a0'],
+					borderColor: 'rgba(1,1,63,0.8)',
+					borderWidth: 3
+				}]
 			},
 			options: {
 				responsive: true,
@@ -277,39 +232,31 @@
 		});
 	}
 
-	onMount(() => {
+onMount(() => {
 		updateDashTime();
 
+		const cached = get(dashboardCache);
+		if (cached) {
+			applyDashboardData(cached);
+			setTimeout(() => {
+				initMainChart();
+				initPieChart();
+			}, 0);
+		}
+
 	    getDashboard(DEMO_MAC)
-			.then((data) => {
-				applyDashboardData(data);
-			})
-			.catch(() => {
-				// keep empty state if API fails
-			});
+			.then(applyDashboardData)
+			.catch(console.error);
 
-		setTimeout(() => {
-			initMainChart();
-			initPieChart();
-
-			// start polling dashboard data every 5s
-			dashboardPollId = window.setInterval(() => {
-				getDashboard(DEMO_MAC)
-					.then((data) => {
-						applyDashboardData(data);
-					})
-					.catch(() => {});
-			}, 2000) as unknown as number;
-		}, 100);
+		dashboardPollId = window.setInterval(() => {
+			getDashboard(DEMO_MAC).then(applyDashboardData).catch(() => {});
+		}, 2000) as unknown as number;
 
 		const timeInterval = setInterval(updateDashTime, 1000);
 
 		return () => {
 			clearInterval(timeInterval);
-			if (dashboardPollId) {
-				clearInterval(dashboardPollId as number);
-				dashboardPollId = null;
-			}
+			if (dashboardPollId) clearInterval(dashboardPollId);
 			if (mainChart) mainChart.destroy();
 			if (pieChart) pieChart.destroy();
 		};

@@ -2,10 +2,11 @@
 	import { currentPage, alertCount } from '../stores';
 	import { getWarningsCount } from '$lib/api';
 	import { onMount } from 'svelte';
-
+	
 	type PageId = 'dashboard' | 'history' | 'alert' | 'profil';
 
-	const DEMO_MAC = 'D4:E9:F4:8A:AF:4C'; // Hardcoded MAC for single device
+	const DEMO_MAC = 'D4:E9:F4:8A:AF:4C';
+	// Hardcoded MAC for single device
 
 	const pages: Array<{ id: PageId; label: string; icon: string }> = [
 		{ id: 'dashboard', label: 'Dashboard', icon: 'grid' },
@@ -32,12 +33,12 @@
 			.then((count) => alertCount.set(count))
 			.catch(() => alertCount.set(0));
 
-		// Poll for warning count updates every 10 seconds
+		// Cek alert baru setiap 2 detik (2000 ms)
 		const interval = setInterval(() => {
 			getWarningsCount(DEMO_MAC)
 				.then((count) => alertCount.set(count))
 				.catch(() => {});
-		}, 10000);
+		}, 2000);
 
 		return () => clearInterval(interval);
 	});
@@ -65,7 +66,8 @@
 				{@html getIcon(page.icon)}
 			</svg>
 			{page.label}
-			{#if page.id === 'alert'}
+			
+			{#if page.id === 'alert' && $alertCount > 0}
 				<span class="alert-badge">{$alertCount}</span>
 			{/if}
 		</div>
@@ -73,6 +75,7 @@
 </nav>
 
 <style>
+	/* CSS-nya tetap sama persis seperti yang kamu punya */
 	.sidebar {
 		width: 220px;
 		min-height: 100vh;
